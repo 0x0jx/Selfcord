@@ -190,11 +190,9 @@ class Bot:
         if self.eval:
 
             def clean_code(content):
-                if content.startswith("```") and content.endswith("```"):
-                    return "\n".join(content.split("\n")[1:])[:-3]
-                else:
+                if not content.startswith("```") and not content.endswith("```"):
                     return content
-
+               return "\n".join(content.split("\n")[1:])[:-3]
 
 
             @self.cmd(description="Executes and runs code", aliases=["exec"])
@@ -230,17 +228,17 @@ class Bot:
             if not inspect.iscoroutinefunction(coro):
                 log.error("Not a coroutine")
                 raise Exception("Not a coroutine")
-            else:
-                self._events[event].append(Event(name=event, coro=coro, ext=None))
-
-                def wrapper(*args, **kwargs):
-                    result = self._events[event].append(
-                        Event(name=event, coro=coro, ext=None)
-                    )
-
-                    return result
-
-                return wrapper
+     
+            self._events[event].append(Event(name=event, coro=coro, ext=None))
+    
+            def wrapper(*args, **kwargs):
+                result = self._events[event].append(
+                    Event(name=event, coro=coro, ext=None)
+                )
+    
+                return result
+    
+            return wrapper
 
         return decorator
 
@@ -257,11 +255,11 @@ class Bot:
             await getattr(self, on_event)(*args, **kwargs)
         if event in self._events.keys():
             for Event in self._events[event]:
-                if Event.coro.__code__.co_varnames[0] == "self":
-                    asyncio.create_task(Event.coro(Event.ext, *args, **kwargs))
-
-                else:
+                if not Event.coro.__code__.co_varnames[0] == "self":
                     asyncio.create_task(Event.coro(*args, **kwargs))
+                asyncio.create_task(Event.coro(Event.ext, *args, **kwargs))
+
+               
 
     def cmd(self, description="", aliases=[]):
         """Decorator to add commands for the bot
@@ -281,12 +279,13 @@ class Bot:
             if not inspect.iscoroutinefunction(coro):
                 log.error("Not a coroutine")
                 raise Exception("Not a coroutine")
-                return
-            else:
-                cmd = Command(
-                    name=name, description=description, aliases=aliases, func=coro
-                )
-                self.commands.add(cmd)
+
+      
+            cmd = Command(
+                name=name, description=description, aliases=aliases, func=coro
+            )
+            self.commands.add(cmd)
+          
             return cmd
 
         return decorator
@@ -310,11 +309,11 @@ class Bot:
             log.error("Not a coroutine")
             raise Exception("Not a coroutine")
 
-        else:
-            cmd = Command(
-                name=name, description=description, aliases=aliases, func=coro
-            )
-            self.commands.add(cmd)
+      
+        cmd = Command(
+            name=name, description=description, aliases=aliases, func=coro
+        )
+        self.commands.add(cmd)
 
     async def process_commands(self, msg):
         """
@@ -341,49 +340,35 @@ class Bot:
         """
         if name is None and url is None:
             return
-        if url is not None:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as resp:
-                    text = await resp.text()
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                text = await resp.text()
 
-            if dir is None:
-                path = os.path.basename(urlparse(url).path)
+        if dir is not None:
+            path = f"{dir}/{os.path.basename(urlparse(url).path)}"
+            
+            if not path.endswith(".py") and not os.path.exists(path):
+                     os.makedirs(dir)
+              
+            raise ValueError(f"Path already exists. {path}")
+            
+              
+            lines = text.splitlines()
+            async with aiofiles.open(path, "a+") as f:
+                for line in lines:
+                    await f.write(f"{line}\n")
 
-                if path.endswith(".py"):
-                    if os.path.exists(path):
-                        log.error(f"Path already exists. {path}")
-                        return
+        name = f"{dir}.{os.path.basename(urlparse(url).path)[:-3]}"
+          
+            path = os.path.basename(urlparse(url).path)
 
-                    lines = text.splitlines()
-                    async with aiofiles.open(path, "a+") as f:
-                        for line in lines:
-                            await f.write(f"{line}\n")
+      
+           raise ValueError(f"{path} is not a python file")
 
-                    name = f"{os.path.basename(urlparse(url).path)[:-3]}"
-
-                else:
-                    log.error(f"{path} is not a python file")
-                    return
-
-            else:
-                path = f"{dir}/{os.path.basename(urlparse(url).path)}"
-                
-                if path.endswith(".py"):
-                    if os.path.exists(path):
-                        log.error(f"Path already exists. {path}")
-                        return
-                    if not os.path.exists(dir):
-                        os.makedirs(dir)
-                    lines = text.splitlines()
-                    async with aiofiles.open(path, "a+") as f:
-                        for line in lines:
-                            await f.write(f"{line}\n")
-
-                    name = f"{dir}.{os.path.basename(urlparse(url).path)[:-3]}"
-
-                else:
-                    log.error(f"{path} is not a python file")
-                    return
+      
+        raise ValueError(f"{path} is not a python file")
+        
 
                 
                 
